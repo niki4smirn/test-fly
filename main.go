@@ -72,7 +72,6 @@ func main() {
 
 	var st stats
 	for {
-	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket read error: %v", err)
