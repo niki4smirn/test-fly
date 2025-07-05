@@ -3,64 +3,89 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"math"
+	"net/http"
+	"strconv"
+	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type tradeMsg struct {
 	Price string `json:"p"`
 }
 
-func main() {
-	const wsURL = "wss://stream.binance.com:9443/ws/btcusdc@trade"
+type stats struct {
+	sync.Mutex
+	n    int64
+	mean float64
+	m2   float64
+}
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+func (s *stats) update(x float64) float64 {
+	s.Lock()
+	defer s.Unlock()
+	s.n++
+	if s.n == 1 {
+		s.mean = x
+		return 0
+	}
+	delta := x - s.mean
+	s.mean += delta / float64(s.n)
+	delta2 := x - s.mean
+	s.m2 += delta * delta2
+	return math.Sqrt(s.m2 / float64(s.n-1))
+}
+
+func main() {
+	datapoints := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "btc_usdc_datapoints",
+			Help: "number of trade messages",
+		},
+	)
+	priceGauge := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "btc_usdc_price",
+			Help: "latest BTC/USDC price",
+		},
+	)
+	volGauge := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "btc_usdc_volatility",
+			Help: "sample standard deviation of price",
+		},
+	)
+	prometheus.MustRegister(datapoints, priceGauge, volGauge)
+	go http.ListenAndServe(":2112", promhttp.Handler())
+
+	conn, _, err := websocket.DefaultDialer.Dial(
+		"wss://stream.binance.com:9443/ws/btcusdc@trade",
+		nil,
+	)
 	if err != nil {
-		log.Fatalf("dial error: %v", err)
+		log.Fatal(err)
 	}
 	defer conn.Close()
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				log.Printf("read error: %v", err)
-				return
-			}
-
-			var t tradeMsg
-			if err := json.Unmarshal(msg, &t); err != nil {
-				log.Printf("json error: %v", err)
-				continue
-			}
-
-			log.Printf("BTC/USDC price: %s", t.Price)
-		}
-	}()
-
+	var st stats
 	for {
-		select {
-		case <-done:
-			return
-		case <-interrupt:
-			log.Println("interrupt")
-
-			_ = conn.WriteMessage(
-				websocket.CloseMessage,
-				websocket.FormatCloseMessage(
-					websocket.CloseNormalClosure, "",
-				),
-			)
-			return
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			continue
 		}
+		var t tradeMsg
+		if json.Unmarshal(msg, &t) != nil {
+			continue
+		}
+		p, err := strconv.ParseFloat(t.Price, 64)
+		if err != nil {
+			continue
+		}
+		datapoints.Inc()
+		priceGauge.Set(p)
+		volGauge.Set(st.update(p))
 	}
 }
