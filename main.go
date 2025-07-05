@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -44,7 +43,7 @@ func main() {
 				continue
 			}
 
-			log.Printf("%s BTC/USDC price: %s", time.Now().Format(time.RFC3339), t.Price)
+			log.Printf("BTC/USDC price: %s", t.Price)
 		}
 	}()
 
