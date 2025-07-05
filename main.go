@@ -72,16 +72,21 @@ func main() {
 
 	var st stats
 	for {
+	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
+			log.Printf("WebSocket read error: %v", err)
+			// Consider reconnection logic here
 			continue
 		}
 		var t tradeMsg
 		if json.Unmarshal(msg, &t) != nil {
+			log.Printf("JSON unmarshal error for message: %s", msg)
 			continue
 		}
 		p, err := strconv.ParseFloat(t.Price, 64)
 		if err != nil {
+			log.Printf("Price parse error: %v for price: %s", err, t.Price)
 			continue
 		}
 		datapoints.Inc()
