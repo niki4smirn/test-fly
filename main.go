@@ -39,6 +39,7 @@ func (s *stats) update(x float64) float64 {
 	return math.Sqrt(s.m2 / float64(s.n-1))
 }
 
+// main starts a Prometheus metrics exporter that connects to the Binance BTC/USDC trade WebSocket stream, processes real-time trade prices, and exposes the latest price, trade count, and price volatility as metrics on port 2112.
 func main() {
 	datapoints := prometheus.NewCounter(
 		prometheus.CounterOpts{
