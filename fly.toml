@@ -1,0 +1,31 @@
+# fly.toml app configuration file generated for test-fly-floral-hill-5972 on 2025-07-05T13:31:23+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'test-fly-floral-hill-5972'
+primary_region = 'waw'
+
+[build]
+  [build.args]
+    GO_VERSION = '1.24.3'
+
+[metrics]
+  port = 2112
+  path = "/metrics"
+
+[env]
+  PORT = '8080'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
